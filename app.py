@@ -407,7 +407,20 @@ def clear_session():
     session.clear()
     flash("Session cleared. Please log in again.")
     return redirect(url_for('login'))
+#syllabus route
+@app.route('/syllabus')
+def syllabus():
+    if 'user_id' not in session:
+        flash("You must log in first!")
+        return redirect(url_for('login'))
 
+    user = User.query.get(session['user_id'])
+    if not user:
+        session.pop('user_id', None)
+        flash("User not found, please log in again.")
+        return redirect(url_for('login'))
+
+    return render_template('syllabus.html', user=user)
 # Run App
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)

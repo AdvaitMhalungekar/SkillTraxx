@@ -160,7 +160,7 @@
         });
 
         document.getElementById('upload-syllabus-btn').addEventListener('click', function () {
-            alert('Opening Upload Syllabus Modal...');
+            window.location.href = "{{ url_for('syllabus') }}";
         });
 
         // Roadmap card interactivity - updated to redirect instead of alert
