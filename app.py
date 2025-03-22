@@ -2,9 +2,12 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import os
 from datetime import timedelta
+import datetime
 import re
+import logging
 from flask_migrate import Migrate
 from roadmap_generator import gen_roadmap
 
@@ -82,6 +85,19 @@ with app.app_context():
 def shutdown_session(exception=None):
     db.session.remove()
 
+def allowed_file(filename):
+    ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Helper function to format file size
+def format_file_size(size_bytes):
+    if size_bytes < 1024:
+        return f"{size_bytes} bytes"
+    elif size_bytes < 1048576:
+        return f"{size_bytes/1024:.1f} KB"
+    else:
+        return f"{size_bytes/1048576:.1f} MB"
 # Home Route
 @app.route('/')
 def home():
@@ -407,7 +423,20 @@ def clear_session():
     session.clear()
     flash("Session cleared. Please log in again.")
     return redirect(url_for('login'))
+#syllabus route
+@app.route('/syllabus')
+def syllabus():
+    if 'user_id' not in session:
+        flash("You must log in first!")
+        return redirect(url_for('login'))
 
+    user = User.query.get(session['user_id'])
+    if not user:
+        session.pop('user_id', None)
+        flash("User not found, please log in again.")
+        return redirect(url_for('login'))
+
+    return render_template('syllabus.html', user=user)
 # Run App
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
