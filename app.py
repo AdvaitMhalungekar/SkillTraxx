@@ -11,7 +11,6 @@ import logging
 from flask_migrate import Migrate
 from roadmap_generator import gen_roadmap
 
-
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -84,6 +83,7 @@ with app.app_context():
 @app.teardown_appcontext
 def shutdown_session(exception=None):
     db.session.remove()
+
 
 def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
@@ -437,6 +437,55 @@ def syllabus():
         return redirect(url_for('login'))
 
     return render_template('syllabus.html', user=user)
+
+# Add new route to handle syllabus upload
+@app.route('/upload_syllabus', methods=['POST'])
+def upload_syllabus():
+    if 'user_id' not in session:
+        flash("You must log in first!")
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user:
+        flash("User not found, please log in again.")
+        return redirect(url_for('login'))
+    
+    # Check if the post request has the file part
+    if 'syllabus_pdf' not in request.files:
+        flash('No file part in the request')
+        return redirect(url_for('syllabus'))
+    
+    file = request.files['syllabus_pdf']
+    
+    # If user does not select file, browser also
+    # submit an empty part without filename
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(url_for('syllabus'))
+    
+    if file and allowed_file(file.filename):
+        # Read file content into memory instead of saving
+        file_content = file.read()
+        file_size = len(file_content)
+        formatted_size = format_file_size(file_size)
+        
+        
+        # logger.info(f"File received: {file.filename} ({formatted_size}) by user {user.id} ({user.email})")
+        print(f"FILE RECEIVED - Name: {file.filename}, Size: {formatted_size}, User: {user.name}")
+        
+       
+        # Render success page
+        upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return render_template(
+            'upload_success.html', 
+            user=user, 
+            filename=file.filename,
+            filesize=formatted_size,
+            upload_time=upload_time
+        )
+    
+    flash('Invalid file type. Please upload a PDF, DOCX, or TXT file.')
+    return redirect(url_for('syllabus'))
 # Run App
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
