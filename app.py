@@ -555,7 +555,7 @@ from werkzeug.routing import BaseConverter, ValidationError
 def quiz(url):
     # Decode back to original URL
     url = url.replace('__SLASH__', '/').replace('__QUESTION__', '?')
-    quiz = asyncio.run(generate_quiz(ur))
+    quiz = asyncio.run(generate_quiz(url))
     print(quiz)
     return render_template("quiz.html", 
                            quiz=quiz, 
