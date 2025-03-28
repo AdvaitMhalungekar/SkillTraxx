@@ -10,6 +10,13 @@ import re
 import logging
 from flask_migrate import Migrate
 from roadmap_generator import gen_roadmap
+import os
+import tempfile
+from pprint import pprint
+import datetime
+from syllabus_pro import generator_pro
+from quiz_generator import generate_quiz
+import asyncio
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -464,28 +471,99 @@ def upload_syllabus():
         return redirect(url_for('syllabus'))
     
     if file and allowed_file(file.filename):
-        # Read file content into memory instead of saving
-        file_content = file.read()
-        file_size = len(file_content)
-        formatted_size = format_file_size(file_size)
+        # Save the uploaded file temporarily
+        temp_dir = tempfile.mkdtemp()
+        temp_path = os.path.join(temp_dir, file.filename)
+        file.save(temp_path)
         
-        
-        # logger.info(f"File received: {file.filename} ({formatted_size}) by user {user.id} ({user.email})")
-        print(f"FILE RECEIVED - Name: {file.filename}, Size: {formatted_size}, User: {user.name}")
-        
-       
-        # Render success page
-        upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return render_template(
-            'upload_success.html', 
-            user=user, 
-            filename=file.filename,
-            filesize=formatted_size,
-            upload_time=upload_time
-        )
+        try:
+            # Execute generator_pro method
+            roadmap_response = generator_pro(temp_path)
+            # print("here")
+            # pprint(roadmap_response)
+            
+            # Save roadmap steps to database
+            if roadmap_response and 'roadmap' in roadmap_response:
+
+                # If validation passes, create the roadmap
+                new_roadmap = Roadmap(
+                    title=roadmap_response['subject'],
+                    description = roadmap_response['subject_desc'],
+                    category=roadmap_response['subject'],
+                    level="beginner",
+                    goals="exam preparation",
+                    custom_requirements= "Syllabus",
+                    target_completion= None,
+                    progress=0,
+                    user_id=user.id,
+                )
+
+                db.session.add(new_roadmap)
+                db.session.commit()
+
+                steps = roadmap_response['roadmap']
+                for i, step in enumerate(steps):
+                    # Set the first step to 'in_progress' and others to 'locked'
+                    status = 'in_progress' if i == 0 else 'locked'
+                
+                    roadmap_step = RoadmapStep(
+                        roadmap_id=new_roadmap.id,
+                        title=step['title'],
+                        description=step['description'],
+                        level=step['level'],
+                        resource_link=step.get('res_link', ''),
+                        order=i,
+                        status=status
+                    )
+                    db.session.add(roadmap_step)
+
+                db.session.commit()
+
+                flash("Roadmap created successfully!")
+                return redirect(url_for('view_roadmap', roadmap_id=new_roadmap.id))
+            else:
+                flash("Failed to generate roadmap. Please try again.")
+                return render_template("create-roadmap.html", user=user) 
+        except Exception as e:
+            # Log the error and flash a message
+            print(f"Error processing syllabus: {str(e)}")
+            flash('Error processing the syllabus. Please try again.')
+            return redirect(url_for('syllabus')) 
+        finally:
+            # Clean up temporary file
+            try:
+                os.remove(temp_path)
+                os.rmdir(temp_dir)
+            except Exception as cleanup_error:
+                print(f"Error cleaning up temp file: {cleanup_error}")
     
     flash('Invalid file type. Please upload a PDF, DOCX, or TXT file.')
     return redirect(url_for('syllabus'))
+
+from werkzeug.routing import BaseConverter, ValidationError
+
+# class URLPathConverter(BaseConverter):
+#     def to_python(self, value):
+#         return value.replace('__SLASH__', '/')
+
+#     def to_url(self, value):
+#         return value.replace('/', '__SLASH__')
+
+# app.url_map.converters['urlpath'] = URLPathConverter
+
+@app.route("/quiz/<string:url>")
+def quiz(url):
+    # Decode back to original URL
+    url = url.replace('__SLASH__', '/').replace('__QUESTION__', '?')
+    quiz = asyncio.run(generate_quiz(ur))
+    print(quiz)
+    return render_template("quiz.html", 
+                           quiz=quiz, 
+                           step_url=url,
+                           roadmap_title=quiz.get('roadmap_title', 'Quiz'),
+                           step_title=quiz.get('step_title', 'Current Step'))
+
+
 # Run App
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
